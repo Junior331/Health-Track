@@ -401,7 +401,7 @@ export default function HealthMonitor() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <Scale className="h-8 w-8" />
-              <h1 className="text-2xl font-bold">Monitor de Saúde</h1>
+              <h1 className="text-lg md:text-2xl font-bold">Monitor de Saúde</h1>
             </div>
             <div className="flex items-center gap-4">
               {user ? (
