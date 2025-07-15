@@ -30,7 +30,7 @@ export const Avatar = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-w-[70px] min-h-[70px] size-[69px] rounded-[70px] border-3 object-cover border-white shadow-[0_0_14px_rgba(0,0,0,0.14)] overflow-hidden">
+    <div className="flex justify-center items-center min-w-[50px] min-h-[50px] size-[50px] rounded-[50px] border-3 object-cover border-white shadow-[0_0_14px_rgba(0,0,0,0.14)] overflow-hidden">
       {isLoading && (
         <div className="size-full flex items-center justify-center">
           <div className="loading loading-spinner text-primary"></div>
