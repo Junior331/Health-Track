@@ -49,6 +49,7 @@ export default function HealthMonitor() {
   const [height, setHeight] = useState("");
   const [weightGoal, setWeightGoal] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingGoal, setIsSavingGoal] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [userGoal, setUserGoal] = useState<UserGoal | null>(null);
@@ -228,30 +229,58 @@ export default function HealthMonitor() {
   };
 
   const saveWeightGoal = async () => {
-    if (!user) return;
-
-    const weightGoalNum = Number.parseFloat(weightGoal);
-
-    const { data, error } = await supabase
-      .from("user_goals")
-      .upsert({
-        user_id: user.id,
-        weight_goal: weightGoalNum,
-        // Mantém os outros valores existentes
-        height_goal: userGoal?.height_goal || null,
-        bmi_goal: userGoal?.bmi_goal || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error saving goal:", error);
-      alert("Erro ao salvar meta. Tente novamente.");
-      return;
+    if (!user || !weightGoal) return;
+  
+    setIsSavingGoal(true);
+  
+    try {
+      const weightGoalNum = Number.parseFloat(weightGoal);
+      
+      // Verifica se já existe um registro para o usuário
+      const { data: existingGoal, error: fetchError } = await supabase
+        .from('user_goals')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+  
+      let upsertData;
+      
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = nenhum resultado encontrado
+        throw fetchError;
+      }
+  
+      if (existingGoal) {
+        // Atualiza o registro existente
+        upsertData = {
+          id: existingGoal.id, // Inclui o ID existente
+          user_id: user.id,
+          weight_goal: weightGoalNum,
+          updated_at: new Date().toISOString()
+        };
+      } else {
+        // Cria um novo registro
+        upsertData = {
+          user_id: user.id,
+          weight_goal: weightGoalNum
+        };
+      }
+  
+      const { data, error } = await supabase
+        .from('user_goals')
+        .upsert(upsertData)
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      setUserGoal(data);
+      setShowGoalInput(false);
+    } catch (error) {
+      console.error('Error saving goal:', error);
+      alert(`Erro ao salvar meta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsSavingGoal(false);
     }
-
-    setUserGoal(data);
-    setShowGoalInput(false);
   };
 
   const getWeightProgress = () => {
@@ -268,7 +297,7 @@ export default function HealthMonitor() {
     return {
       difference,
       percentage,
-      isGoalReached: Math.abs(difference) < 0.5, // Considera meta alcançada se diferença < 0.5kg
+      isGoalReached: Math.abs(difference) < 0.5,
       isOver: difference > 0,
     };
   };
@@ -684,8 +713,35 @@ export default function HealthMonitor() {
                             <Button
                               onClick={saveWeightGoal}
                               className="flex-1 bg-[#2ECC71] hover:bg-[#27AE60] text-white"
+                              disabled={isSavingGoal || !weightGoal} // Desabilita se estiver salvando ou se weightGoal estiver vazio
                             >
-                              Salvar
+                              {isSavingGoal ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <svg
+                                    className="animate-spin h-5 w-5 text-white"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                  Salvando...
+                                </div>
+                              ) : (
+                                "Salvar"
+                              )}
                             </Button>
                             <Button
                               onClick={() => {

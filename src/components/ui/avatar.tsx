@@ -18,10 +18,6 @@ export const Avatar = () => {
     rounded: true,
     backgroundColors: ["#FF5733", "#3357FF", "#33FF57"],
   });
-  
-  useEffect(() => {
-    console.log("displayName ::", displayName)
-  }, [displayName])
 
   const handleImageLoad = () => {
     setIsLoading(false);
