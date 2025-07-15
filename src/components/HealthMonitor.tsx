@@ -150,18 +150,6 @@ export default function HealthMonitor() {
     fetchData();
   }, [user]);
 
-  //   const calculateBMI = (weight: number, height: number) => {
-  //     const heightInMeters = height / 100;
-  //     return weight / (heightInMeters * heightInMeters);
-  //   };
-
-  //   const getBMIClassification = (bmi: number) => {
-  //     if (bmi < 18.5) return "Abaixo do peso";
-  //     if (bmi < 25) return "Saudável";
-  //     if (bmi < 30) return "Sobrepeso";
-  //     return "Obesidade";
-  //   };
-
   const getClassificationColor = (classification: string) => {
     switch (classification) {
       case "Saudável":
@@ -179,15 +167,23 @@ export default function HealthMonitor() {
     e.preventDefault();
     if (!weight || !height || !selectedDate || !user) return;
 
-    setIsSubmitting(true); // Ativa o estado de loading
+    const hasRecordForDate = records.some(r => r.date === selectedDate);
+  
+    if (hasRecordForDate) {
+      alert("Você já tem um registro para esta data.");
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       const weightNum = Number.parseFloat(weight);
       const heightNum = Number.parseFloat(height);
 
+      // Alterar de upsert para insert
       const { data: newRecord, error } = await supabase
         .from("health_records")
-        .upsert({
+        .insert({
           user_id: user.id,
           date: selectedDate,
           weight: weightNum,
@@ -198,10 +194,10 @@ export default function HealthMonitor() {
 
       if (error) throw error;
 
-      const updatedRecords = [
-        newRecord,
-        ...records.filter((r) => r.date !== newRecord.date),
-      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Atualizar a lista de registros
+      const updatedRecords = [newRecord, ...records].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
 
       setRecords(updatedRecords);
       setWeight("");
@@ -209,8 +205,12 @@ export default function HealthMonitor() {
       setSelectedDate(new Date().toISOString().split("T")[0]);
     } catch (error) {
       console.error("Error saving record:", error);
+      // Mostrar mensagem de erro específica para o usuário
+      alert(
+        "Erro ao salvar registro. Verifique se a data já existe ou tente novamente."
+      );
     } finally {
-      setIsSubmitting(false); // Desativa o estado de loading
+      setIsSubmitting(false);
     }
   };
 
