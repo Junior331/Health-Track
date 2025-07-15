@@ -8,6 +8,14 @@ export type formatterProps = {
   style?: keyof Intl.NumberFormatOptionsStyleRegistry;
 };
 
+export interface UserGoal {
+  id: string;
+  user_id: string;
+  weight_goal: number | null;
+  height_goal: number | null;
+  bmi_goal: number | null;
+}
+
 export type lang = {
   id: number;
   flag: string;

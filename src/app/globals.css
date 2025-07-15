@@ -93,3 +93,11 @@ body::-webkit-scrollbar-thumb {
 input:-webkit-autofill {
   transition: background-color 5000s ease-in-out 0s;
 }
+
+.progress-bar {
+  transition: width 0.5s ease-in-out;
+}
+
+.progress-text {
+  transition: color 0.3s ease;
+}

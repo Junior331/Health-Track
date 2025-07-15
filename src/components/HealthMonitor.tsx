@@ -29,9 +29,10 @@ import {
   Download,
   Bell,
 } from "lucide-react";
+import { UserGoal } from "@/types";
+import { Avatar } from "./ui/avatar";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { Avatar } from "./ui/avatar";
 
 interface HealthRecord {
   id: string;
@@ -48,8 +49,9 @@ export default function HealthMonitor() {
   const [height, setHeight] = useState("");
   const [weightGoal, setWeightGoal] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [records, setRecords] = useState<HealthRecord[]>([]);
   const [showGoalInput, setShowGoalInput] = useState(false);
+  const [records, setRecords] = useState<HealthRecord[]>([]);
+  const [userGoal, setUserGoal] = useState<UserGoal | null>(null);
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -132,19 +134,30 @@ export default function HealthMonitor() {
 
       if (records) setRecords(records);
 
-      // Carregar meta
       const { data: goal, error: goalError } = await supabase
         .from("user_goals")
-        .select("weight_goal")
+        .select("*")
         .eq("user_id", user.id)
         .single();
 
       if (goalError) {
         console.error("Error fetching goal:", goalError);
-        return;
-      }
+        // Se não existir, cria um registro vazio
+        const { data: newGoal, error: insertError } = await supabase
+          .from("user_goals")
+          .insert({ user_id: user.id })
+          .select()
+          .single();
 
-      if (goal) setWeightGoal(goal.weight_goal.toString());
+        if (!insertError) {
+          setUserGoal(newGoal);
+        }
+      } else {
+        setUserGoal(goal);
+        if (goal?.weight_goal) {
+          setWeightGoal(goal.weight_goal.toString());
+        }
+      }
     };
 
     fetchData();
@@ -217,20 +230,47 @@ export default function HealthMonitor() {
   const saveWeightGoal = async () => {
     if (!user) return;
 
-    const { error } = await supabase
+    const weightGoalNum = Number.parseFloat(weightGoal);
+
+    const { data, error } = await supabase
       .from("user_goals")
       .upsert({
         user_id: user.id,
-        weight_goal: Number.parseFloat(weightGoal),
+        weight_goal: weightGoalNum,
+        // Mantém os outros valores existentes
+        height_goal: userGoal?.height_goal || null,
+        bmi_goal: userGoal?.bmi_goal || null,
       })
-      .select();
+      .select()
+      .single();
 
     if (error) {
       console.error("Error saving goal:", error);
+      alert("Erro ao salvar meta. Tente novamente.");
       return;
     }
 
+    setUserGoal(data);
     setShowGoalInput(false);
+  };
+
+  const getWeightProgress = () => {
+    if (!userGoal?.weight_goal || records.length === 0) return null;
+
+    const currentWeight = records[0].weight;
+    const goalWeight = userGoal.weight_goal;
+    const difference = currentWeight - goalWeight;
+    const percentage = Math.max(
+      0,
+      Math.min(100, (Math.abs(difference) / goalWeight) * 100)
+    );
+
+    return {
+      difference,
+      percentage,
+      isGoalReached: Math.abs(difference) < 0.5, // Considera meta alcançada se diferença < 0.5kg
+      isOver: difference > 0,
+    };
   };
 
   const getWeightDifference = () => {
@@ -438,13 +478,6 @@ export default function HealthMonitor() {
                             className="border-gray-200 focus:border-[#3498DB]"
                           />
                         </div>
-                        {/* <Button
-                          type="submit"
-                          className="w-full bg-[#2ECC71] hover:bg-[#27AE60] text-white rounded-lg"
-                        >
-                          Salvar Registro
-                        </Button> */}
-
                         <Button
                           type="submit"
                           className="w-full bg-[#2ECC71] hover:bg-[#27AE60] text-white rounded-lg cursor-pointer"
@@ -564,64 +597,63 @@ export default function HealthMonitor() {
                       {!showGoalInput ? (
                         <div className="space-y-3">
                           <div className="text-2xl font-bold text-[#2C3E50]">
-                            {weightGoal ? `${weightGoal}kg` : "Não definida"}
+                            {userGoal?.weight_goal
+                              ? `${userGoal.weight_goal}kg`
+                              : "Não definida"}
                           </div>
 
-                          {/* Progresso da Meta */}
-                          {weightGoal && records.length > 0 && (
+                          {userGoal?.weight_goal && records.length > 0 && (
                             <div className="space-y-2">
                               <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">
                                   Atual: {records[0].weight}kg
                                 </span>
                                 <span className="text-gray-600">
-                                  Meta: {weightGoal}kg
+                                  Meta: {userGoal.weight_goal}kg
                                 </span>
                               </div>
+
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                  className="bg-[#2ECC71] h-2 rounded-full transition-all duration-300"
+                                  className={`h-2 rounded-full transition-all duration-300 ${
+                                    getWeightProgress()?.isGoalReached
+                                      ? "bg-green-500"
+                                      : getWeightProgress()?.isOver
+                                      ? "bg-yellow-500"
+                                      : "bg-blue-500"
+                                  }`}
                                   style={{
-                                    width: `${Math.min(
-                                      100,
-                                      Math.max(
-                                        0,
-                                        100 -
-                                          (Math.abs(
-                                            records[0].weight -
-                                              Number.parseFloat(weightGoal)
-                                          ) /
-                                            Number.parseFloat(weightGoal)) *
-                                            100
-                                      )
-                                    )}%`,
+                                    width: `${
+                                      100 -
+                                      (getWeightProgress()?.percentage || 0)
+                                    }%`,
                                   }}
                                 />
                               </div>
+
                               <div className="text-center">
-                                {records[0].weight >
-                                Number.parseFloat(weightGoal) ? (
-                                  <span className="text-orange-600 text-sm font-medium">
-                                    -
-                                    {(
-                                      records[0].weight -
-                                      Number.parseFloat(weightGoal)
-                                    ).toFixed(1)}
-                                    kg para a meta
-                                  </span>
-                                ) : records[0].weight <
-                                  Number.parseFloat(weightGoal) ? (
-                                  <span className="text-blue-600 text-sm font-medium">
-                                    +
-                                    {(
-                                      Number.parseFloat(weightGoal) -
-                                      records[0].weight
-                                    ).toFixed(1)}
-                                    kg para a meta
-                                  </span>
-                                ) : (
+                                {getWeightProgress()?.isGoalReached ? (
                                   <span className="text-green-600 text-sm font-medium">
                                     🎉 Meta alcançada!
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={
+                                      getWeightProgress()?.isOver
+                                        ? "text-yellow-600"
+                                        : "text-blue-600"
+                                    }
+                                  >
+                                    {getWeightProgress()!.difference > 0
+                                      ? "-"
+                                      : "+"}
+                                    {Math.abs(
+                                      getWeightProgress()?.difference || 0
+                                    ).toFixed(1)}
+                                    kg
+                                    {getWeightProgress()!.difference > 0
+                                      ? " acima da meta"
+                                      : " para a meta"}
                                   </span>
                                 )}
                               </div>
@@ -633,7 +665,9 @@ export default function HealthMonitor() {
                             variant="outline"
                             className="w-full border-[#3498DB] text-[#3498DB] hover:bg-[#3498DB] hover:text-white"
                           >
-                            {weightGoal ? "Alterar Meta" : "Definir Meta"}
+                            {userGoal?.weight_goal
+                              ? "Alterar Meta"
+                              : "Definir Meta"}
                           </Button>
                         </div>
                       ) : (
@@ -654,7 +688,12 @@ export default function HealthMonitor() {
                               Salvar
                             </Button>
                             <Button
-                              onClick={() => setShowGoalInput(false)}
+                              onClick={() => {
+                                setShowGoalInput(false);
+                                setWeightGoal(
+                                  userGoal?.weight_goal?.toString() || ""
+                                );
+                              }}
                               variant="outline"
                               className="flex-1"
                             >
