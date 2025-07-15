@@ -56,7 +56,6 @@ export default function HealthMonitor() {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -67,7 +66,6 @@ export default function HealthMonitor() {
 
       if (error) {
         console.error("Error fetching session:", error);
-        setLoading(false);
         return;
       }
 
@@ -92,7 +90,6 @@ export default function HealthMonitor() {
         setAuth(null);
       }
 
-      setLoading(false);
     };
 
     fetchSession();
