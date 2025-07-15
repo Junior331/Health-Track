@@ -30,8 +30,8 @@ import {
   Bell,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import Auth from "@/components/ui/Auth";
 import { useAuth } from "@/context/AuthContext";
+import { Avatar } from "./ui/avatar";
 
 interface HealthRecord {
   id: string;
@@ -167,8 +167,8 @@ export default function HealthMonitor() {
     e.preventDefault();
     if (!weight || !height || !selectedDate || !user) return;
 
-    const hasRecordForDate = records.some(r => r.date === selectedDate);
-  
+    const hasRecordForDate = records.some((r) => r.date === selectedDate);
+
     if (hasRecordForDate) {
       alert("Você já tem um registro para esta data.");
       return;
@@ -277,6 +277,31 @@ export default function HealthMonitor() {
     a.click();
   };
 
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+
+    if (error) {
+      console.error("Erro no login:", error.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("Erro no logout:", error.message);
+    }
+  };
+
   const chartData = records
     .slice(0, 30)
     .reverse()
@@ -309,7 +334,26 @@ export default function HealthMonitor() {
               <Scale className="h-8 w-8" />
               <h1 className="text-2xl font-bold">Monitor de Saúde</h1>
             </div>
-            <Auth />
+            <div className="flex items-center gap-4">
+              {user ? (
+                <>
+                  <Avatar />
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Sair
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleLogin}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Entrar com Google
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-blue-100 mt-2">
             Acompanhe seu peso, altura e IMC diariamente
