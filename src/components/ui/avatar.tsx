@@ -12,7 +12,7 @@ export const Avatar = () => {
     console.log("user ::", user)
   }, [user])
   
-  const displayName = user?.name || user?.email?.split("@")[0] || "U";
+  const displayName = user?.user_metadata.name || user?.email?.split("@")[0] || "U";
   const avatarUrl = useAvatar(displayName, {
     size: 69,
     rounded: true,
@@ -44,7 +44,7 @@ export const Avatar = () => {
         onLoad={handleImageLoad}
         onError={handleImageError}
         alt={`Avatar de ${displayName}`}
-        src={user?.avatar_url || avatarUrl}
+        src={user?.user_metadata.avatar_url || avatarUrl}
         className={`size-full object-cover ${isLoading ? "hidden" : ""}`}
       />
     </div>
