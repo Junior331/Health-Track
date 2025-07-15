@@ -7,10 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 export const Avatar = () => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    console.log("user ::", user)
-  }, [user])
   
   const displayName = user?.user_metadata.name || user?.email?.split("@")[0] || "U";
   const avatarUrl = useAvatar(displayName, {
