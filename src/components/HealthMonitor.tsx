@@ -1,14 +1,14 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LineChart,
   Line,
@@ -47,13 +47,13 @@ export default function HealthMonitor() {
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [weightGoal, setWeightGoal] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [loading, setLoading] = useState(true);
-
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -68,7 +68,27 @@ export default function HealthMonitor() {
         return;
       }
 
-      setAuth(session?.user || null);
+      if (session) {
+        setAuth(session.user);
+
+        // Verificar se o perfil existe e criar se necessário
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+
+        if (!profile && !profileError) {
+          await supabase.from("profiles").upsert({
+            id: session.user.id,
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name || "",
+          });
+        }
+      } else {
+        setAuth(null);
+      }
+
       setLoading(false);
     };
 
@@ -76,12 +96,23 @@ export default function HealthMonitor() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuth(session?.user || null);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setAuth(session.user);
+
+        // Garantir que o perfil existe
+        await supabase.from("profiles").upsert({
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || "",
+        });
+      } else {
+        setAuth(null);
+      }
     });
 
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -119,17 +150,17 @@ export default function HealthMonitor() {
     fetchData();
   }, [user]);
 
-  const calculateBMI = (weight: number, height: number) => {
-    const heightInMeters = height / 100;
-    return weight / (heightInMeters * heightInMeters);
-  };
+  //   const calculateBMI = (weight: number, height: number) => {
+  //     const heightInMeters = height / 100;
+  //     return weight / (heightInMeters * heightInMeters);
+  //   };
 
-  const getBMIClassification = (bmi: number) => {
-    if (bmi < 18.5) return "Abaixo do peso";
-    if (bmi < 25) return "Saudável";
-    if (bmi < 30) return "Sobrepeso";
-    return "Obesidade";
-  };
+  //   const getBMIClassification = (bmi: number) => {
+  //     if (bmi < 18.5) return "Abaixo do peso";
+  //     if (bmi < 25) return "Saudável";
+  //     if (bmi < 30) return "Sobrepeso";
+  //     return "Obesidade";
+  //   };
 
   const getClassificationColor = (classification: string) => {
     switch (classification) {
@@ -146,58 +177,53 @@ export default function HealthMonitor() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!weight || !height || !selectedDate) return;
+    if (!weight || !height || !selectedDate || !user) return;
 
-    const weightNum = Number.parseFloat(weight);
-    const heightNum = Number.parseFloat(height);
-    const bmi = calculateBMI(weightNum, heightNum);
-    const classification = getBMIClassification(bmi);
+    setIsSubmitting(true); // Ativa o estado de loading
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const weightNum = Number.parseFloat(weight);
+      const heightNum = Number.parseFloat(height);
 
-    const { data: newRecord, error } = await supabase
-      .from("health_records")
-      .upsert({
-        user_id: user.id,
-        date: selectedDate,
-        weight: weightNum,
-        height: heightNum,
-        bmi: Number.parseFloat(bmi.toFixed(1)),
-        classification,
-      })
-      .select()
-      .single();
+      const { data: newRecord, error } = await supabase
+        .from("health_records")
+        .upsert({
+          user_id: user.id,
+          date: selectedDate,
+          weight: weightNum,
+          height: heightNum,
+        })
+        .select()
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      const updatedRecords = [
+        newRecord,
+        ...records.filter((r) => r.date !== newRecord.date),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setRecords(updatedRecords);
+      setWeight("");
+      setHeight("");
+      setSelectedDate(new Date().toISOString().split("T")[0]);
+    } catch (error) {
       console.error("Error saving record:", error);
-      return;
+    } finally {
+      setIsSubmitting(false); // Desativa o estado de loading
     }
-
-    // Atualizar state local
-    const updatedRecords = [
-      newRecord,
-      ...records.filter((r) => r.date !== newRecord.date),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    setRecords(updatedRecords);
-    setWeight("");
-    setHeight("");
-    setSelectedDate(new Date().toISOString().split("T")[0]);
   };
 
   const saveWeightGoal = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from("user_goals").upsert({
-      user_id: user.id,
-      weight_goal: Number.parseFloat(weightGoal),
-    });
+    const { error } = await supabase
+      .from("user_goals")
+      .upsert({
+        user_id: user.id,
+        weight_goal: Number.parseFloat(weightGoal),
+      })
+      .select();
 
     if (error) {
       console.error("Error saving goal:", error);
@@ -267,7 +293,12 @@ export default function HealthMonitor() {
   const weightDiff = getWeightDifference();
   const monthlyBMI = getMonthlyBMIAverage();
 
-  if (loading) return <div>Carregando...</div>;
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
 
   return (
     <>
@@ -363,11 +394,45 @@ export default function HealthMonitor() {
                             className="border-gray-200 focus:border-[#3498DB]"
                           />
                         </div>
-                        <Button
+                        {/* <Button
                           type="submit"
                           className="w-full bg-[#2ECC71] hover:bg-[#27AE60] text-white rounded-lg"
                         >
                           Salvar Registro
+                        </Button> */}
+
+                        <Button
+                          type="submit"
+                          className="w-full bg-[#2ECC71] hover:bg-[#27AE60] text-white rounded-lg cursor-pointer"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <svg
+                                className="animate-spin h-5 w-5 text-white"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              Enviando...
+                            </div>
+                          ) : (
+                            "Salvar Registro"
+                          )}
                         </Button>
                       </form>
                     </CardContent>
